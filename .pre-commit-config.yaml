@@ -41,4 +41,3 @@ repos:
       #    - --args=--non-recursive
       - id: terraform_tfsec
       - id: terraform_checkov
-

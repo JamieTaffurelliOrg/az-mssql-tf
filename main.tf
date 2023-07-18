@@ -1,8 +1,9 @@
 resource "azurerm_mssql_server" "sql_server" {
+  #checkov:skip=CKV_AZURE_24:Storage account auditing may not be required as log analytics could be all thats needed
   name                                 = var.sql_server_name
   resource_group_name                  = var.resource_group_name
   location                             = var.location
-  version                              = var.version
+  version                              = var.sql_server_version
   minimum_tls_version                  = "1.2"
   connection_policy                    = var.connection_policy
   public_network_access_enabled        = var.public_network_access_enabled
@@ -60,14 +61,12 @@ resource "azurerm_mssql_server_extended_auditing_policy" "sql_extended_audit_pol
 }
 
 resource "azurerm_mssql_server_microsoft_support_auditing_policy" "sql_ms_support_audit_policy" {
-  server_id                               = azurerm_mssql_server.sql_server.id
-  enabled                                 = true
-  storage_endpoint                        = var.ms_support_audit_policy.storage_audit_enabled == true ? data.azurerm_storage_account.monitor_storage_account.primary_blob_endpoint : null
-  storage_account_access_key              = var.ms_support_audit_policy.storage_audit_enabled == true ? data.azurerm_storage_account.monitor_storage_account.primary_access_key : null
-  storage_account_access_key_is_secondary = var.ms_support_audit_policy.storage_audit_enabled == true ? var.ms_support_audit_policy.storage_account_access_key_is_secondary : null
-  retention_in_days                       = var.ms_support_audit_policy.storage_audit_enabled == true ? var.ms_support_audit_policy.retention_in_days : null
-  log_monitoring_enabled                  = true
-  storage_account_subscription_id         = var.ms_support_audit_policy.storage_audit_enabled == true ? var.ms_support_audit_policy.storage_account_subscription_id : null
+  server_id                       = azurerm_mssql_server.sql_server.id
+  enabled                         = true
+  blob_storage_endpoint           = var.ms_support_audit_policy.storage_audit_enabled == true ? data.azurerm_storage_account.monitor_storage_account.primary_blob_endpoint : null
+  storage_account_access_key      = var.ms_support_audit_policy.storage_audit_enabled == true ? data.azurerm_storage_account.monitor_storage_account.primary_access_key : null
+  log_monitoring_enabled          = true
+  storage_account_subscription_id = var.ms_support_audit_policy.storage_audit_enabled == true ? var.ms_support_audit_policy.storage_account_subscription_id : null
 }
 
 resource "azurerm_mssql_server_dns_alias" "dns_alias" {
@@ -93,11 +92,13 @@ resource "azurerm_mssql_firewall_rule" "firewall_rule" {
 resource "azurerm_mssql_virtual_network_rule" "network_rule" {
   for_each  = { for k in var.network_rules : k.name => k if k != null }
   name      = each.key
-  server_id = azurerm_mssql_server.example.id
+  server_id = azurerm_mssql_server.sql_server.id
   subnet_id = each.value["subnet_id"]
 }
 
+#tfsec:ignore:azure-database-threat-alert-email-set
 resource "azurerm_mssql_server_security_alert_policy" "alert_policy" {
+  #checkov:skip=CKV_AZURE_26:Email addresses are paramterised and emailing account admins is enforced
   resource_group_name        = var.resource_group_name
   server_name                = azurerm_mssql_server.sql_server.name
   state                      = "Enabled"
@@ -115,7 +116,7 @@ resource "azurerm_mssql_server_transparent_data_encryption" "tde" {
 
 resource "azurerm_mssql_server_vulnerability_assessment" "vuln_assess" {
   server_security_alert_policy_id = azurerm_mssql_server_security_alert_policy.alert_policy.id
-  storage_container_path          = "${data.azurerm_storage_account.monitor_storage_account.primary_blob_endpoint}${var.storage_account.container_name}/"
+  storage_container_path          = "${data.azurerm_storage_account.monitor_storage_account.primary_blob_endpoint}${var.monitor_storage_account.container_name}/"
   storage_account_access_key      = data.azurerm_storage_account.monitor_storage_account.primary_access_key
 
   recurring_scans {
@@ -174,27 +175,27 @@ resource "azurerm_mssql_database" "sql_db" {
   for_each                            = { for k in var.databases : k.name => k if k != null }
   name                                = each.key
   server_id                           = azurerm_mssql_server.sql_server.id
-  auto_pause_delay_in_minutes         = var.auto_pause_delay_in_minutes
-  create_mode                         = var.create_mode
-  creation_source_database_id         = var.creation_source_database_id
+  auto_pause_delay_in_minutes         = each.value["auto_pause_delay_in_minutes"]
+  create_mode                         = each.value["create_mode"]
+  creation_source_database_id         = each.value["creation_source_database_id"]
   elastic_pool_id                     = each.value["elastic_pool_reference"] == null ? null : azurerm_mssql_elasticpool.elastic_pool[(each.value["elastic_pool_reference"])].id
-  geo_backup_enabled                  = var.geo_backup_enabled
-  maintenance_configuration_name      = each.value["elastic_pool_reference"] == null ? var.maintenance_configuration_name : null
-  ledger_enabled                      = var.ledger_enabled
-  min_capacity                        = var.min_capacity
-  restore_point_in_time               = var.restore_point_in_time
-  recover_database_id                 = var.recover_database_id
-  restore_dropped_database_id         = var.restore_dropped_database_id
-  read_replica_count                  = var.read_replica_count
-  sample_name                         = var.sample_name
-  sku_name                            = var.sku_name
-  storage_account_type                = var.storage_account_type
+  geo_backup_enabled                  = each.value["geo_backup_enabled"]
+  maintenance_configuration_name      = each.value["elastic_pool_reference"] == null ? each.value["maintenance_configuration_name"] : null
+  ledger_enabled                      = each.value["ledger_enabled"]
+  min_capacity                        = each.value["min_capacity"]
+  restore_point_in_time               = each.value["restore_point_in_time"]
+  recover_database_id                 = each.value["recover_database_id"]
+  restore_dropped_database_id         = each.value["restore_dropped_database_id"]
+  read_replica_count                  = each.value["read_replica_count"]
+  sample_name                         = each.value["sample_name"]
+  sku_name                            = each.value["sku_name"]
+  storage_account_type                = each.value["storage_account_type"]
   transparent_data_encryption_enabled = true
-  collation                           = var.collation
-  license_type                        = var.license_type
-  max_size_gb                         = var.max_size_gb
-  read_scale                          = var.read_scale
-  zone_redundant                      = var.zone_redundant
+  collation                           = each.value["collation"]
+  license_type                        = each.value["license_type"]
+  max_size_gb                         = each.value["max_size_gb"]
+  read_scale                          = each.value["read_scale"]
+  zone_redundant                      = each.value["zone_redundant"]
 
   dynamic "import" {
     for_each = each.value["import"] == null ? [] : [each.value["import"]]
@@ -211,15 +212,15 @@ resource "azurerm_mssql_database" "sql_db" {
   }
 
   long_term_retention_policy {
-    weekly_retention  = var.long_term_retention_policy.weekly_retention
-    monthly_retention = var.long_term_retention_policy.monthly_retention
-    yearly_retention  = var.long_term_retention_policy.yearly_retention
-    week_of_year      = var.long_term_retention_policy.week_of_year
+    weekly_retention  = each.value["long_term_retention_policy"].weekly_retention
+    monthly_retention = each.value["long_term_retention_policy"].monthly_retention
+    yearly_retention  = each.value["long_term_retention_policy"].yearly_retention
+    week_of_year      = each.value["long_term_retention_policy"].week_of_year
   }
 
   short_term_retention_policy {
-    retention_days           = var.short_term_retention_policy.retention_days
-    backup_interval_in_hours = var.short_term_retention_policy.backup_interval_in_hours
+    retention_days           = each.value["short_term_retention_policy"].retention_days
+    backup_interval_in_hours = each.value["short_term_retention_policy"].backup_interval_in_hours
   }
 
   tags = var.tags

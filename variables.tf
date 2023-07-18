@@ -8,7 +8,12 @@ variable "resource_group_name" {
   description = "The name of the resource group to deploy the sql server to"
 }
 
-variable "version" {
+variable "location" {
+  type        = string
+  description = "The location of the sql server"
+}
+
+variable "sql_server_version" {
   type        = string
   default     = "12.0"
   description = "The version for the new server. Valid values are: 2.0 (for v11 server) and 12.0 (for v12 server"
@@ -44,6 +49,7 @@ variable "object_id" {
 
 variable "extended_audit_policy" {
   type = object({
+    storage_audit_enabled                   = optional(bool, false)
     storage_account_access_key_is_secondary = optional(bool, false)
     retention_in_days                       = optional(number, 0)
     storage_account_subscription_id         = optional(string)
@@ -54,9 +60,8 @@ variable "extended_audit_policy" {
 
 variable "ms_support_audit_policy" {
   type = object({
-    storage_account_access_key_is_secondary = optional(bool, false)
-    retention_in_days                       = optional(number, 0)
-    storage_account_subscription_id         = optional(string)
+    storage_audit_enabled           = optional(bool, false)
+    storage_account_subscription_id = optional(string)
   })
   default     = null
   description = "SQL server Microsoft support audit policy"
@@ -95,7 +100,7 @@ variable "network_rules" {
 
 variable "alert_policy" {
   type = object({
-    retention_in_days = optional(number, 0)
+    retention_days = optional(number, 0)
   })
   default     = null
   description = "SQL server extended audit policy"
@@ -123,7 +128,7 @@ variable "private_endpoint" {
   type = object({
     subnet_name                          = string
     virtual_network_name                 = string
-    resource_group_name                  = string
+    subnet_resource_group_name           = string
     private_dns_zone_name                = string
     private_dns_zone_resource_group_name = string
   })
@@ -198,7 +203,6 @@ variable "failover_groups" {
 
 variable "email_addresses" {
   type        = list(string)
-  default     = []
   description = "Additional email addresses for alerts"
 }
 
@@ -206,6 +210,7 @@ variable "monitor_storage_account" {
   type = object({
     name                = string
     resource_group_name = string
+    container_name      = string
   })
   default     = null
   description = "SQL server extended audit policy"
