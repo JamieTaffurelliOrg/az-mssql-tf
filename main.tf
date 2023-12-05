@@ -173,6 +173,7 @@ resource "azurerm_private_endpoint" "private_endpoint" {
 
 resource "azurerm_mssql_database" "sql_db" {
   #checkov:skip=CKV_AZURE_224:Ledger may not be required
+  #checkov:skip=CKV_AZURE_229:May not require zone redundancy in all cases
   for_each                            = { for k in var.databases : k.name => k if k != null }
   name                                = each.key
   server_id                           = azurerm_mssql_server.sql_server.id
